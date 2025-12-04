@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Netflix - Video Browse</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+
+<body>
+
+    <div class="nav" id="nav">
+        <div class="nav-left">
+            <img class="nav-logo" src="https://upload.wikimedia.org/wikipedia/commons/0/08/Netflix_2015_logo.svg"
+                alt="Netflix">
+            <ul class="nav-links">
+                <li><a href="#">Home</a></li>
+                <li><a href="#">TV Shows</a></li>
+                <li><a href="#">Movies</a></li>
+                <li><a href="#">New & Popular</a></li>
+            </ul>
+        </div>
+
+        <div class="nav-right">
+            <div class="search-box">
+                <button class="search-btn" id="searchBtn">
+                    <i class="fas fa-search"></i>
+                </button>
+                <input type="text" class="search-input" id="searchInput" placeholder="Titles, people, genres">
+            </div>
+
+            <span class="nav-text">KIDS</span>
+            <img class="nav-avatar" src="https://upload.wikimedia.org/wikipedia/commons/0/0b/Netflix-avatar.png"
+                alt="Profile">
+        </div>
+    </div>
+
+    <header class="banner">
+        <div class="banner-contents">
+            <h1 class="banner-title">Stranger Things</h1>
+            <div class="banner-buttons">
+                <button class="banner-button play"><i class="fas fa-play"></i> Play</button>
+                <button class="banner-button info"><i class="fas fa-info-circle"></i> More Info</button>
+            </div>
+            <p class="banner-description">
+                When a young boy vanishes, a small town uncovers a mystery involving secret experiments, terrifying
+                supernatural forces, and one strange little girl.
+            </p>
+        </div>
+        <div class="banner--fadeBottom"></div>
+    </header>
+
+    <main class="main-content">
+        <div class="row">
+            <h2>Trending Now</h2>
+            <div class="row-posters"></div>
+        </div>
+
+        <div class="row">
+            <h2>Top 10 Today</h2>
+            <div class="row-posters"></div>
+        </div>
+        </div>
+
+        <div class="row">
+            <h2>Top Picks for You</h2>
+            <div class="row-posters" id="row-2">
+            </div>
+        </div>
+
+        <div class="row">
+            <h2>Action Thrillers</h2>
+            <div class="row-posters" id="row-3">
+            </div>
+        </div>
+    </main>
+
+    <script src="script.js"></script>
+</body>
+
+</html>
