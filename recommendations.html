@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Netflix - AI Recommendations</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+
+<body>
+
+    <div class="nav" id="nav">
+        <div class="nav-left">
+            <img class="nav-logo" src="https://upload.wikimedia.org/wikipedia/commons/0/08/Netflix_2015_logo.svg"
+                alt="Netflix">
+            <ul class="nav-links">
+                <li><a href="index.html">Home</a></li>
+                <li><a href="recommendations.html" class="active">Recommendations <span class="ai-badge">AI</span></a></li>
+            </ul>
+        </div>
+
+        <div class="nav-right">
+            <div class="search-box">
+                <button class="search-btn" id="searchBtn">
+                    <i class="fas fa-search"></i>
+                </button>
+                <input type="text" class="search-input" id="searchInput" placeholder="Search AI recommendations...">
+            </div>
+
+            <span class="nav-text">KIDS</span>
+            <img class="nav-avatar" src="https://upload.wikimedia.org/wikipedia/commons/0/0b/Netflix-avatar.png"
+                alt="Profile">
+        </div>
+    </div>
+
+    <header class="banner ai-banner">
+        <div class="banner-contents">
+            <h1 class="banner-title">🤖 AI Powered Recommendations</h1>
+            <div class="banner-buttons">
+                <button class="banner-button play" id="aiPlayBtn"><i class="fas fa-play"></i> Play Top Pick</button>
+                <button class="banner-button info" id="aiStatsBtn"><i class="fas fa-chart-line"></i> My Stats</button>
+            </div>
+            <p class="banner-description" id="aiDescription">
+                Our AI has analyzed your viewing patterns, likes, dislikes, and search history to curate these personalized recommendations just for you.
+            </p>
+        </div>
+        <div class="banner--fadeBottom"></div>
+    </header>
+
+    <main class="main-content">
+        <!-- AI Stats Section -->
+        <div class="row ai-stats-section" id="aiStatsSection" style="display: none;">
+            <h2><i class="fas fa-chart-pie"></i> Your Viewing Analytics</h2>
+            <div class="stats-container">
+                <div class="stat-card">
+                    <div class="stat-number" id="likedCount">0</div>
+                    <div class="stat-label">Liked Movies</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number" id="watchedCount">0</div>
+                    <div class="stat-label">Movies Watched</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number" id="searchCount">0</div>
+                    <div class="stat-label">Searches Made</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number" id="aiAccuracy">0%</div>
+                    <div class="stat-label">AI Accuracy</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Primary AI Recommendations -->
+        <div class="row ai-recommendations">
+            <h2><i class="fas fa-robot"></i> Top AI Picks For You</h2>
+            <p class="ai-description">Based on your unique viewing fingerprint</p>
+            <div class="row-posters" id="aiTopPicks"></div>
+        </div>
+
+        <!-- Genre-based Recommendations -->
+        <div class="row ai-genre-recommendations">
+            <h2><i class="fas fa-tags"></i> Because You Liked <span id="topGenre">Action</span></h2>
+            <p class="ai-description">Movies matching your favorite genres</p>
+            <div class="row-posters" id="aiGenrePicks"></div>
+        </div>
+
+        <!-- Similar Movies Section -->
+        <div class="row ai-similar-recommendations">
+            <h2><i class="fas fa-clone"></i> More Like What You Watched</h2>
+            <p class="ai-description">Similar to your recently viewed content</p>
+            <div class="row-posters" id="aiSimilarPicks"></div>
+        </div>
+
+        <!-- Trending AI Picks -->
+        <div class="row ai-trending-recommendations">
+            <h2><i class="fas fa-fire"></i> Trending AI Discoveries</h2>
+            <p class="ai-description">Popular picks from our AI across all users</p>
+            <div class="row-posters" id="aiTrendingPicks"></div>
+        </div>
+
+        <!-- Surprise Me Section -->
+        <div class="row ai-surprise-recommendations">
+            <h2><i class="fas fa-surprise"></i> Surprise Me!</h2>
+            <p class="ai-description">AI-selected movies outside your usual preferences</p>
+            <div class="row-posters" id="aiSurprisePicks"></div>
+        </div>
+    </main>
+
+    <!-- AI Stats Modal -->
+    <div class="ai-modal" id="aiModal" style="display: none;">
+        <div class="modal-content">
+            <span class="modal-close" id="modalClose">&times;</span>
+            <h2><i class="fas fa-brain"></i> AI Learning Progress</h2>
+            <div class="learning-progress">
+                <div class="progress-item">
+                    <span>Preference Learning</span>
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="prefProgress" style="width: 0%"></div>
+                    </div>
+                </div>
+                <div class="progress-item">
+                    <span>Genre Analysis</span>
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="genreProgress" style="width: 0%"></div>
+                    </div>
+                </div>
+                <div class="progress-item">
+                    <span>Viewing Pattern Recognition</span>
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="patternProgress" style="width: 0%"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="ai-insights">
+                <h3>AI Insights About You:</h3>
+                <ul id="aiInsightsList">
+                    <li>Getting to know your preferences...</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <script src="recommendations.js"></script>
+</body>
+
+</html>
