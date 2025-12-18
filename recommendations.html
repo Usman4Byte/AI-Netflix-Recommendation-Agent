@@ -50,62 +50,11 @@
     </header>
 
     <main class="main-content">
-        <!-- AI Stats Section -->
-        <div class="row ai-stats-section" id="aiStatsSection" style="display: none;">
-            <h2><i class="fas fa-chart-pie"></i> Your Viewing Analytics</h2>
-            <div class="stats-container">
-                <div class="stat-card">
-                    <div class="stat-number" id="likedCount">0</div>
-                    <div class="stat-label">Liked Movies</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-number" id="watchedCount">0</div>
-                    <div class="stat-label">Movies Watched</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-number" id="searchCount">0</div>
-                    <div class="stat-label">Searches Made</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-number" id="aiAccuracy">0%</div>
-                    <div class="stat-label">AI Accuracy</div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Primary AI Recommendations -->
-        <div class="row ai-recommendations">
-            <h2><i class="fas fa-robot"></i> Top AI Picks For You</h2>
-            <p class="ai-description">Based on your unique viewing fingerprint</p>
-            <div class="row-posters" id="aiTopPicks"></div>
-        </div>
-
-        <!-- Genre-based Recommendations -->
-        <div class="row ai-genre-recommendations">
-            <h2><i class="fas fa-tags"></i> Because You Liked <span id="topGenre">Action</span></h2>
-            <p class="ai-description">Movies matching your favorite genres</p>
-            <div class="row-posters" id="aiGenrePicks"></div>
-        </div>
-
-        <!-- Similar Movies Section -->
-        <div class="row ai-similar-recommendations">
-            <h2><i class="fas fa-clone"></i> More Like What You Watched</h2>
-            <p class="ai-description">Similar to your recently viewed content</p>
-            <div class="row-posters" id="aiSimilarPicks"></div>
-        </div>
-
-        <!-- Trending AI Picks -->
-        <div class="row ai-trending-recommendations">
-            <h2><i class="fas fa-fire"></i> Trending AI Discoveries</h2>
-            <p class="ai-description">Popular picks from our AI across all users</p>
-            <div class="row-posters" id="aiTrendingPicks"></div>
-        </div>
-
-        <!-- Surprise Me Section -->
-        <div class="row ai-surprise-recommendations">
-            <h2><i class="fas fa-surprise"></i> Surprise Me!</h2>
-            <p class="ai-description">AI-selected movies outside your usual preferences</p>
-            <div class="row-posters" id="aiSurprisePicks"></div>
+        <!-- Single AI Recommendations Grid -->
+        <div class="row ai-recommendations" id="ai-recommendations-section">
+            <h2><i class="fas fa-robot"></i> AI Recommendations For You</h2>
+            <p class="ai-description">Ranked by similarity to your profile, with small boosts from ratings and activity.</p>
+            <div class="row-posters" id="ai-recommendations-posters"></div>
         </div>
     </main>
 
