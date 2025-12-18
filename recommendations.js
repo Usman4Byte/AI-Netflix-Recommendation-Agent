@@ -4,6 +4,15 @@
 // API Configuration
 const API_BASE_URL = 'http://localhost:5000/api';
 
+// Utility: debounce
+function debounce(fn, delay = 800) {
+    let t;
+    return (...args) => {
+        clearTimeout(t);
+        t = setTimeout(() => fn.apply(null, args), delay);
+    };
+}
+
 // Movie configuration (same as main page)
 const categoryMovies = {
     "Trending Now": [
@@ -35,6 +44,7 @@ const categoryMovies = {
 let movies = {};
 let allMovieTitles = [];
 let aiRecommendations = [];
+let aiDetailed = [];
 let userStats = {};
 
 // Initialize movies from categories
@@ -112,32 +122,55 @@ async function trackSearch(query) {
             })
         });
         console.log('Search tracked successfully');
+        debouncedRefreshRecommendations();
     } catch (error) {
         console.warn('Failed to track search:', error);
     }
 }
 
+async function trackWatchProgress(title, secondsDelta) {
+    try {
+        if (!title || !secondsDelta || secondsDelta <= 0) return;
+        await fetch(`${API_BASE_URL}/track-watch-progress`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                title: title,
+                seconds: secondsDelta
+            })
+        });
+        debouncedRefreshRecommendations();
+    } catch (error) {
+        console.warn('Failed to track watch progress:', error);
+    }
+}
+
 async function loadAIRecommendations() {
     try {
-        const response = await fetch(`${API_BASE_URL}/get-recommendations`);
+        const response = await fetch(`${API_BASE_URL}/get-recommendations`, { cache: 'no-store' });
         if (response.ok) {
             const data = await response.json();
             aiRecommendations = data.recommendations || [];
+            aiDetailed = data.itemsDetailed || [];
             console.log('AI Recommendations loaded:', aiRecommendations);
             
             // If no AI recommendations, use fallback
             if (aiRecommendations.length === 0) {
                 console.log('No AI recommendations found, using fallback');
-                aiRecommendations = allMovieTitles.slice(0, 6);
+                aiRecommendations = allMovieTitles.slice(0, 12);
+                aiDetailed = aiRecommendations.map(t => ({ title: t, score: 0, reasons: ['Fallback'] }));
             }
             
-            populateAllRecommendationSections();
+            populateAIRecommendations();
         }
     } catch (error) {
         console.warn('Failed to load AI recommendations:', error);
         console.log('Using fallback recommendations due to error');
-        aiRecommendations = allMovieTitles.slice(0, 6);
-        populateAllRecommendationSections();
+        aiRecommendations = allMovieTitles.slice(0, 12);
+        aiDetailed = aiRecommendations.map(t => ({ title: t, score: 0, reasons: ['Fallback'] }));
+        populateAIRecommendations();
     }
 }
 
@@ -161,6 +194,7 @@ async function loadUserStats() {
 function createVideoCard(title, isAIRecommended = true, badgeText = 'AI Pick') {
     const card = document.createElement('div');
     card.className = 'video-card ai-recommended';
+    const detail = aiDetailed.find(d => d.title === title);
 
     const movieData = movies[title];
     if (!movieData) {
@@ -184,7 +218,8 @@ function createVideoCard(title, isAIRecommended = true, badgeText = 'AI Pick') {
     // AI badge
     const aiBadge = document.createElement('div');
     aiBadge.className = 'ai-badge-card';
-    aiBadge.innerHTML = `<i class="fas fa-robot"></i> ${badgeText}`;
+    const reasonTxt = detail && Array.isArray(detail.reasons) && detail.reasons.length > 0 ? ` • ${detail.reasons[0]}` : '';
+    aiBadge.innerHTML = `<i class="fas fa-robot"></i> ${badgeText}${reasonTxt}`;
 
     // Title overlay
     const titleOverlay = document.createElement('div');
@@ -304,137 +339,39 @@ function updateOverlayButtons(title) {
 }
 
 // Populate recommendation sections
-function populateAllRecommendationSections() {
-    populateTopPicks();
-    populateGenreRecommendations();
-    populateSimilarRecommendations();
-    populateTrendingRecommendations();
-    populateSurpriseRecommendations();
-}
-
-function populateTopPicks() {
-    const container = document.getElementById('aiTopPicks');
-    if (!container) {
-        console.error('aiTopPicks container not found!');
-        return;
-    }
-    
-    container.innerHTML = '';
-    
-    let topPicks = [];
-    
-    if (aiRecommendations.length > 0) {
-        topPicks = aiRecommendations.slice(0, 6);
-    } else {
-        // Fallback to all available movies
-        topPicks = allMovieTitles.slice(0, 6);
-        console.log('Using fallback movies for top picks:', topPicks);
-    }
-    
-    if (topPicks.length === 0) {
-        container.innerHTML = '<div class="loading-recommendations">🤖 No movies available</div>';
-        return;
-    }
-    
-    topPicks.forEach(movie => {
-        if (movies[movie]) {
-            const card = createVideoCard(movie, true, 'Top Pick');
-            container.appendChild(card);
-        } else {
-            console.warn(`Movie not found in movies object: ${movie}`);
-        }
-    });
-    
-    console.log(`Populated ${topPicks.length} top picks`);
-}
-
-function populateGenreRecommendations() {
-    const container = document.getElementById('aiGenrePicks');
+function populateAIRecommendations() {
+    const container = document.getElementById('ai-recommendations-posters');
     if (!container) return;
-    
     container.innerHTML = '';
-    
-    // Use different slice or fallback
-    let genrePicks = [];
-    if (aiRecommendations.length >= 8) {
-        genrePicks = aiRecommendations.slice(2, 8);
-    } else if (aiRecommendations.length > 0) {
-        genrePicks = aiRecommendations.slice(0, Math.min(6, aiRecommendations.length));
-    } else {
-        genrePicks = allMovieTitles.slice(1, 7); // Different slice for variety
-    }
-    
-    genrePicks.forEach(movie => {
+
+    const list = aiRecommendations.length ? aiRecommendations : allMovieTitles.slice(0, 12);
+    list.forEach(movie => {
         if (movies[movie]) {
-            const card = createVideoCard(movie, true, 'Genre Match');
+            const detail = aiDetailed.find(d => d.title === movie);
+            const card = createVideoCard(movie, true, 'AI Pick');
+            // Update badge with reason if available
+            const badge = card.querySelector('.ai-badge-card');
+            const reasonTxt = detail && Array.isArray(detail.reasons) && detail.reasons.length > 0 ? ` • ${detail.reasons[0]}` : '';
+            const scoreTxt = detail && detail.score != null ? ` (${detail.score})` : '';
+            if (badge) badge.innerHTML = `<i class="fas fa-robot"></i> AI Pick${scoreTxt}${reasonTxt}`;
             container.appendChild(card);
         }
     });
-    
-    // Update the genre name in the header
-    updateTopGenre();
+
+    if (!list.length) {
+        container.innerHTML = '<div class="loading-recommendations">🤖 AI is learning your preferences...</div>';
+    }
 }
 
-function populateSimilarRecommendations() {
-    const container = document.getElementById('aiSimilarPicks');
-    if (!container) return;
-    
-    container.innerHTML = '';
-    
-    let similarPicks = [];
-    if (aiRecommendations.length >= 7) {
-        similarPicks = aiRecommendations.slice(1, 7);
-    } else {
-        similarPicks = allMovieTitles.slice(2, 8); // Another different slice
-    }
-    
-    similarPicks.forEach(movie => {
-        if (movies[movie]) {
-            const card = createVideoCard(movie, true, 'Similar');
-            container.appendChild(card);
-        }
-    });
-}
+// Removed multi-section population functions in favor of single grid
 
-function populateTrendingRecommendations() {
-    const container = document.getElementById('aiTrendingPicks');
-    if (!container) return;
-    
-    container.innerHTML = '';
-    
-    // Mix AI recommendations with all movies for trending
-    let trendingPicks = [];
-    if (aiRecommendations.length >= 3) {
-        trendingPicks = [...aiRecommendations.slice(0, 3), ...allMovieTitles.slice(0, 3)];
-    } else {
-        trendingPicks = allMovieTitles.slice(3, 9); // Different slice
-    }
-    
-    // Remove duplicates
-    trendingPicks = [...new Set(trendingPicks)].slice(0, 6);
-    
-    trendingPicks.forEach(movie => {
-        if (movies[movie]) {
-            const card = createVideoCard(movie, true, 'Trending');
-            container.appendChild(card);
-        }
-    });
-}
+// Removed genre-based section
 
-function populateSurpriseRecommendations() {
-    const container = document.getElementById('aiSurprisePicks');
-    container.innerHTML = '';
-    
-    // Random selection from all movies
-    const shuffled = [...allMovieTitles].sort(() => 0.5 - Math.random());
-    const surprisePicks = shuffled.slice(0, 6);
-    surprisePicks.forEach(movie => {
-        if (movies[movie]) {
-            const card = createVideoCard(movie, true, 'Surprise');
-            container.appendChild(card);
-        }
-    });
-}
+// Removed similar section
+
+// Removed trending section
+
+// Removed surprise section
 
 function updateTopGenre() {
     const preferences = getPreferences();
@@ -521,7 +458,9 @@ function initializeSearch() {
             await trackSearch(query);
             filterRecommendations(query);
         } else {
-            populateAllRecommendationSections();
+            // Reset to main AI grid and refresh
+            populateAIRecommendations();
+            debouncedRefreshRecommendations();
         }
     });
 }
@@ -531,23 +470,21 @@ function filterRecommendations(query) {
         movie.toLowerCase().includes(query)
     );
     
-    // Update all sections with filtered results
-    const sections = ['aiTopPicks', 'aiGenrePicks', 'aiSimilarPicks', 'aiTrendingPicks', 'aiSurprisePicks'];
-    sections.forEach(sectionId => {
-        const container = document.getElementById(sectionId);
-        container.innerHTML = '';
-        
-        filteredMovies.slice(0, 6).forEach(movie => {
-            if (movies[movie]) {
-                const card = createVideoCard(movie, true, 'Match');
-                container.appendChild(card);
-            }
-        });
-        
-        if (filteredMovies.length === 0) {
-            container.innerHTML = '<div class="no-results">No matches found</div>';
+    const container = document.getElementById('ai-recommendations-posters');
+    container.innerHTML = '';
+    filteredMovies.slice(0, 12).forEach(movie => {
+        if (movies[movie]) {
+            const detail = aiDetailed.find(d => d.title === movie);
+            const card = createVideoCard(movie, true, 'Match');
+            const badge = card.querySelector('.ai-badge-card');
+            const reasonTxt = detail && Array.isArray(detail.reasons) && detail.reasons.length > 0 ? ` • ${detail.reasons[0]}` : '';
+            if (badge) badge.innerHTML = `<i class=\"fas fa-robot\"></i> Match${reasonTxt}`;
+            container.appendChild(card);
         }
     });
+    if (filteredMovies.length === 0) {
+        container.innerHTML = '<div class="no-results">No matches found</div>';
+    }
 }
 
 // Video player (same as main page)
@@ -643,6 +580,9 @@ function openPlayer(title, src) {
     document.body.style.overflow = 'hidden';
     const nav = document.getElementById('nav');
     if (nav) nav.style.display = 'none';
+
+    // Start tracking watch progress for this title
+    setupProgressTracking(title);
 }
 
 function closePlayer() {
@@ -661,6 +601,9 @@ function closePlayer() {
     if (document.fullscreenElement) {
         document.exitFullscreen().catch(()=>{});
     }
+
+    // Stop progress tracking
+    teardownProgressTracking();
 }
 
 function recordWatch(title) {
@@ -680,6 +623,52 @@ function recordWatch(title) {
     }
 }
 
+// --- Watch Progress Tracking ---
+let progressTimer = null;
+let lastReportedTime = 0;
+let currentProgressTitle = null;
+
+function setupProgressTracking(title) {
+    const player = document.getElementById('overlay-video');
+    if (!player) return;
+    currentProgressTitle = title;
+    lastReportedTime = 0;
+
+    // Clear any prior interval
+    if (progressTimer) clearInterval(progressTimer);
+    progressTimer = setInterval(async () => {
+        try {
+            const now = player.currentTime || 0;
+            const delta = Math.max(0, now - lastReportedTime);
+            if (delta > 1) {
+                await trackWatchProgress(title, delta);
+                lastReportedTime = now;
+            }
+        } catch (e) {
+            console.warn('Progress interval error', e);
+        }
+    }, 5000);
+
+    player.onended = async () => {
+        try {
+            const now = player.currentTime || 0;
+            const delta = Math.max(0, now - lastReportedTime);
+            if (delta > 0.5) await trackWatchProgress(title, delta);
+            lastReportedTime = now;
+            debouncedRefreshRecommendations();
+        } catch (e) {}
+    };
+}
+
+function teardownProgressTracking() {
+    const player = document.getElementById('overlay-video');
+    if (player) player.onended = null;
+    if (progressTimer) clearInterval(progressTimer);
+    progressTimer = null;
+    lastReportedTime = 0;
+    currentProgressTitle = null;
+}
+
 // Event listeners
 document.addEventListener('DOMContentLoaded', async () => {
     console.log('DOM loaded, initializing recommendations page');
@@ -694,18 +683,17 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Initialize search
     initializeSearch();
     
-    // Load AI data - but don't wait if it fails
+    // Load AI data - single section
     try {
         await loadUserStats();
         await loadAIRecommendations();
     } catch (error) {
         console.warn('Failed to load AI data, using fallbacks:', error);
-        // Populate with fallback data
-        aiRecommendations = allMovieTitles.slice(0, 6);
-        populateAllRecommendationSections();
+        aiRecommendations = allMovieTitles.slice(0, 12);
+        populateAIRecommendations();
     }
     
-    // Set up UI event listeners
+    // Optional: set up UI event listeners for modal/stats if kept
     setupUIEventListeners();
 });
 
@@ -753,3 +741,13 @@ function setupUIEventListeners() {
         });
     }
 }
+
+// Debounced refresh: re-fetch recommendations and stats without spamming
+const debouncedRefreshRecommendations = debounce(async () => {
+    try {
+        await loadAIRecommendations();
+        await loadUserStats();
+    } catch (e) {
+        console.warn('Debounced refresh failed', e);
+    }
+}, 800);
