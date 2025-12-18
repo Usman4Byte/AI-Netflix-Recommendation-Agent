@@ -8,6 +8,7 @@ import numpy as np
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 from sklearn.preprocessing import StandardScaler
+import random
 import pandas as pd
 
 app = Flask(__name__)
@@ -170,9 +171,9 @@ def save_json_file(filename, data):
 class MovieRecommendationAI:
     def __init__(self):
         self.movies_df = self.create_movies_dataframe()
-        self.tfidf_vectorizer = TfidfVectorizer()
+        self.text_vectorizer = TfidfVectorizer(min_df=1, lowercase=True)
         self.scaler = StandardScaler()
-        self.setup_content_based_features()
+        self._fit_feature_space()
     
     def create_movies_dataframe(self):
         """Convert movie database to pandas DataFrame"""
@@ -180,49 +181,44 @@ class MovieRecommendationAI:
         for title, info in MOVIE_DATABASE.items():
             movies_data.append({
                 'title': title,
-                'genres': ' '.join(info['genres']),
+                'genres': info['genres'],
                 'year': info['year'],
                 'rating': info['rating'],
-                'keywords': ' '.join(info['keywords']),
-                'director': info['director']
+                'keywords': info['keywords'],
+                'director': info['director'],
+                'text': ' '.join(info['genres'] + info['keywords'] + [info['director']])
             })
         return pd.DataFrame(movies_data)
     
-    def setup_content_based_features(self):
-        """Setup TF-IDF vectors for content-based filtering"""
-        # Combine genres and keywords for content analysis
-        content_features = self.movies_df['genres'] + ' ' + self.movies_df['keywords']
-        self.tfidf_matrix = self.tfidf_vectorizer.fit_transform(content_features)
-        
-        # Setup numerical features (year, rating)
-        numerical_features = self.movies_df[['year', 'rating']].values
-        self.numerical_features_scaled = self.scaler.fit_transform(numerical_features)
+    def _fit_feature_space(self):
+        """Build item feature space: TF-IDF (text) + scaled numeric features"""
+        # TF-IDF text features over genres + keywords + director
+        self.tfidf_matrix = self.text_vectorizer.fit_transform(self.movies_df['text'])
+        # Numerical features
+        numerical = self.movies_df[['year', 'rating']].values
+        self.numeric_scaled = self.scaler.fit_transform(numerical)
+        # Dense item vectors
+        self.item_vectors = np.hstack([self.tfidf_matrix.toarray(), self.numeric_scaled])
+        # Index lookup
+        self.title_to_index = {t: i for i, t in enumerate(self.movies_df['title'])}
     
     def get_user_preferences_vector(self, user_data):
-        """Create user preference vector based on likes/dislikes"""
+        """Extract liked/disliked lists from user data"""
         liked_movies = []
         disliked_movies = []
-        
         for movie, prefs in user_data.get('preferences', {}).items():
             if prefs.get('liked', False):
                 liked_movies.append(movie)
             elif prefs.get('disliked', False):
                 disliked_movies.append(movie)
-        
         return liked_movies, disliked_movies
     
     def calculate_content_similarity(self, target_movie_idx):
-        """Calculate content-based similarity scores"""
-        movie_tfidf = self.tfidf_matrix[target_movie_idx]
-        content_similarities = cosine_similarity(movie_tfidf, self.tfidf_matrix).flatten()
-        
-        # Also consider numerical features
-        movie_numerical = self.numerical_features_scaled[target_movie_idx].reshape(1, -1)
-        numerical_similarities = cosine_similarity(movie_numerical, self.numerical_features_scaled).flatten()
-        
-        # Combine both similarities (70% content, 30% numerical)
-        combined_similarities = 0.7 * content_similarities + 0.3 * numerical_similarities
-        return combined_similarities
+        """Calculate content-based similarity scores to a target movie"""
+        # Similarity over dense item vectors (text + numeric)
+        target_vec = self.item_vectors[target_movie_idx].reshape(1, -1)
+        sims = cosine_similarity(target_vec, self.item_vectors).flatten()
+        return sims
     
     def get_genre_preferences(self, liked_movies, disliked_movies):
         """Analyze user's genre preferences"""
@@ -256,82 +252,165 @@ class MovieRecommendationAI:
         
         return watch_scores
     
-    def generate_recommendations(self, user_data, search_data, watch_data, num_recommendations=6):
-        """Generate AI-powered movie recommendations"""
+    def _build_user_profile(self, user_data, watch_data, search_data):
+        """Construct a user profile vector from likes, dislikes, watches, searches"""
+        liked, disliked = self.get_user_preferences_vector(user_data)
+        profile = np.zeros(self.item_vectors.shape[1], dtype=float)
+        # Weights
+        like_w = 1.0
+        dislike_w = -0.7
+        watch_w_per_view = 0.2
+        search_w_per_query = 0.2  # increase sensitivity to searches
+        # Likes / dislikes
+        for m in liked:
+            if m in self.title_to_index:
+                profile += like_w * self.item_vectors[self.title_to_index[m]]
+        for m in disliked:
+            if m in self.title_to_index:
+                profile += dislike_w * self.item_vectors[self.title_to_index[m]]
+        # Watches
+        for m, data in watch_data.items():
+            if m in self.title_to_index:
+                count = max(0, int(data.get('count', 0)))
+                boost = min(count * watch_w_per_view, 0.8)
+                profile += boost * self.item_vectors[self.title_to_index[m]]
+        # Searches mapped into TF-IDF space
+        for q, data in search_data.items():
+            try:
+                q_vec = self.text_vectorizer.transform([q]).toarray()
+                q_weight = min(data.get('count', 0) * search_w_per_query, 0.8)
+                profile[:q_vec.shape[1]] += q_weight * q_vec[0]
+            except Exception:
+                pass
+        # Normalize
+        norm = np.linalg.norm(profile)
+        if norm > 0:
+            profile = profile / norm
+        return profile, liked, disliked
+
+    def _explain_for_item(self, title, liked):
+        info = MOVIE_DATABASE.get(title, {})
+        reasons = []
+        # Genre overlap with liked movies
+        liked_genres = {}
+        for m in liked:
+            for g in MOVIE_DATABASE.get(m, {}).get('genres', []):
+                liked_genres[g] = liked_genres.get(g, 0) + 1
+        overlaps = [g for g in info.get('genres', []) if g in liked_genres]
+        if overlaps:
+            reasons.append(f"Matches your liked genres: {', '.join(sorted(set(overlaps)))}")
+        # Similar to a top liked movie
         try:
-            liked_movies, disliked_movies = self.get_user_preferences_vector(user_data)
-            genre_preferences = self.get_genre_preferences(liked_movies, disliked_movies)
-            watch_scores = self.calculate_watch_time_boost(watch_data)
-            
-            # Get all movie titles
-            all_movies = list(MOVIE_DATABASE.keys())
-            recommendations = {}
-            
-            # If user has no preferences, return popular movies
-            if not liked_movies and not genre_preferences:
-                sorted_movies = sorted(MOVIE_DATABASE.items(), 
-                                     key=lambda x: x[1]['rating'], reverse=True)
-                return [movie[0] for movie in sorted_movies[:num_recommendations]]
-            
-            # Calculate scores for each movie
-            for movie in all_movies:
-                if movie in liked_movies or movie in disliked_movies:
-                    continue  # Skip already rated movies
-                
-                score = 0
-                movie_info = MOVIE_DATABASE[movie]
-                
-                # Genre preference score
-                genre_score = 0
-                for genre in movie_info['genres']:
-                    genre_score += genre_preferences.get(genre, 0)
-                score += genre_score * 0.4
-                
-                # Content similarity score (if we have liked movies)
-                if liked_movies:
-                    similarity_scores = []
-                    movie_idx = self.movies_df[self.movies_df['title'] == movie].index[0]
-                    
-                    for liked_movie in liked_movies:
-                        if liked_movie in self.movies_df['title'].values:
-                            liked_idx = self.movies_df[self.movies_df['title'] == liked_movie].index[0]
-                            similarity = self.calculate_content_similarity(liked_idx)[movie_idx]
-                            similarity_scores.append(similarity)
-                    
-                    if similarity_scores:
-                        avg_similarity = np.mean(similarity_scores)
-                        score += avg_similarity * 0.3
-                
-                # Watch time boost
-                score += watch_scores.get(movie, 0) * 0.2
-                
-                # Rating boost (normalize to 0-1 scale)
-                rating_boost = (movie_info['rating'] - 3.0) / 2.0  # Assuming ratings 3-5
-                score += rating_boost * 0.1
-                
-                # Search history boost
-                search_count = 0
-                for query, data in search_data.items():
-                    if movie.lower() in query.lower() or any(keyword in query.lower() for keyword in movie_info['keywords']):
-                        search_count += data.get('count', 0)
-                
-                if search_count > 0:
-                    score += min(search_count * 0.1, 0.3)  # Cap search boost
-                
-                recommendations[movie] = score
-            
-            # Sort by score and return top recommendations
-            sorted_recommendations = sorted(recommendations.items(), 
-                                          key=lambda x: x[1], reverse=True)
-            
-            return [movie[0] for movie in sorted_recommendations[:num_recommendations]]
-            
+            idx_target = self.title_to_index[title]
+            best_sim = 0.0
+            best_like = None
+            for m in liked:
+                if m in self.title_to_index:
+                    idx_like = self.title_to_index[m]
+                    sim = cosine_similarity(
+                        self.item_vectors[idx_target].reshape(1, -1),
+                        self.item_vectors[idx_like].reshape(1, -1)
+                    )[0][0]
+                    if sim > best_sim:
+                        best_sim = sim
+                        best_like = m
+            if best_like and best_sim > 0.2:
+                reasons.append(f"Similar to what you liked: {best_like}")
+        except Exception:
+            pass
+        # Rating prior
+        if info.get('rating', 0) >= 4.5:
+            reasons.append("Highly rated")
+        return reasons
+
+    def recommend(self, user_data, search_data, watch_data, n=12):
+        """Profile-based hybrid with diversity (MMR), jitter and exploration"""
+        try:
+            profile, liked, disliked = self._build_user_profile(user_data, watch_data, search_data)
+            titles = list(MOVIE_DATABASE.keys())
+            # If profile empty, return top-rated with light shuffle for freshness
+            if np.linalg.norm(profile) == 0:
+                ranked = sorted(titles, key=lambda t: MOVIE_DATABASE[t]['rating'], reverse=True)
+                block = ranked[:max(n * 2, 12)]
+                rng = random.Random(datetime.now().timestamp())
+                rng.shuffle(block)
+                block = block[:n]
+                return [{'title': t, 'score': MOVIE_DATABASE[t]['rating'], 'reasons': ['Top rated']} for t in block]
+
+            # Base scoring per item
+            base_scores = []  # (title, score, reasons, idx)
+            for t in titles:
+                if t in liked or t in disliked:
+                    continue
+                idx = self.title_to_index[t]
+                item_vec = self.item_vectors[idx]
+                sim = float(cosine_similarity(profile.reshape(1, -1), item_vec.reshape(1, -1))[0][0])
+                rating_prior = (MOVIE_DATABASE[t]['rating'] - 3.0) / 2.0
+                w = watch_data.get(t, {})
+                c = w.get('count', 0)
+                secs = float(w.get('seconds', 0.0))
+                watch_boost = min(0.2 * np.log1p(secs / 60.0) + 0.1 * c, 0.8)
+                search_boost = 0.0
+                for q, data in search_data.items():
+                    hit = (t.lower() in q) or any(k in q for k in [kw.lower() for kw in MOVIE_DATABASE[t]['keywords']])
+                    if hit:
+                        search_boost += min(data.get('count', 0) * 0.05, 0.25)
+                dislike_penalty = 0.0
+                alpha, beta, gamma, delta, eta = 0.6, 0.1, 0.25, 0.15, 0.4
+                score = alpha*sim + beta*rating_prior + gamma*watch_boost + delta*search_boost - eta*dislike_penalty
+                reasons = self._explain_for_item(t, liked)
+                if search_boost > 0:
+                    reasons.append("Related to your searches")
+                if watch_boost > 0:
+                    reasons.append("You watch similar content often")
+                base_scores.append((t, score, reasons, idx))
+
+            if not base_scores:
+                top = sorted(MOVIE_DATABASE.items(), key=lambda x: x[1]['rating'], reverse=True)[:n]
+                return [{'title': t, 'score': v['rating'], 'reasons': ['Top rated'] } for t, v in top]
+
+            # Add small jitter so close items rotate across refreshes
+            rng_np = np.random.default_rng()
+            sigma = 0.03
+            jittered = [(t, s + float(rng_np.normal(0, sigma)), r, idx) for (t, s, r, idx) in base_scores]
+            jittered.sort(key=lambda x: x[1], reverse=True)
+
+            # MMR diversity selection from a larger pool
+            lambda_mmr = 0.7
+            selected = []
+            selected_vecs = []
+            pool = jittered[:max(2 * n, 20)]
+
+            def mmr_score(item):
+                _, s, _, idx = item
+                x = self.item_vectors[idx]
+                if not selected_vecs:
+                    return s
+                max_sim = max(float(cosine_similarity(x.reshape(1, -1), sv.reshape(1, -1))[0][0]) for sv in selected_vecs)
+                return lambda_mmr * s - (1 - lambda_mmr) * max_sim
+
+            while pool and len(selected) < n:
+                best = max(pool, key=mmr_score)
+                pool.remove(best)
+                t, s, r, idx = best
+                selected.append((t, s, r, idx))
+                selected_vecs.append(self.item_vectors[idx])
+
+            # Small exploration: occasionally swap in a high-rated unseen item
+            if titles and selected and rng_np.random() < 0.25:
+                seen = {t for (t, _, _, _) in selected} | set(liked) | set(disliked)
+                unseen = [t for t in titles if t not in seen]
+                if unseen:
+                    pick_pool = sorted(unseen, key=lambda t: MOVIE_DATABASE[t]['rating'], reverse=True)[:6]
+                    if pick_pool:
+                        pick = pick_pool[int(rng_np.integers(0, len(pick_pool)))]
+                        selected[-1] = (pick, MOVIE_DATABASE[pick]['rating'], ['Exploration pick', 'Highly rated'], self.title_to_index[pick])
+
+            return [{'title': t, 'score': round(float(s), 3), 'reasons': r} for (t, s, r, _) in selected[:n]]
         except Exception as e:
-            print(f"Error generating recommendations: {e}")
             # Fallback to highest rated movies
-            sorted_movies = sorted(MOVIE_DATABASE.items(), 
-                                 key=lambda x: x[1]['rating'], reverse=True)
-            return [movie[0] for movie in sorted_movies[:num_recommendations]]
+            top = sorted(MOVIE_DATABASE.items(), key=lambda x: x[1]['rating'], reverse=True)[:n]
+            return [{'title': t, 'score': v['rating'], 'reasons': ['Top rated'] } for t, v in top]
 
 # Initialize AI engine
 ai_engine = MovieRecommendationAI()
@@ -410,6 +489,32 @@ def track_watch():
     except Exception as e:
         return jsonify({'status': 'error', 'message': str(e)}), 500
 
+@app.route('/api/track-watch-progress', methods=['POST'])
+def track_watch_progress():
+    """Incrementally track watch progress in seconds for a given title"""
+    try:
+        data = request.json
+        title = data.get('title') or data.get('movie')
+        seconds = data.get('seconds')
+        if not title or seconds is None:
+            return jsonify({'status': 'error', 'message': 'Missing title or seconds'}), 400
+        try:
+            seconds = float(seconds)
+        except Exception:
+            return jsonify({'status': 'error', 'message': 'Invalid seconds'}), 400
+        if seconds < 0:
+            seconds = 0.0
+
+        watch_data = load_json_file(WATCH_DATA_FILE)
+        entry = watch_data.get(title, {'count': 0, 'first_watch': datetime.now().isoformat()})
+        entry['seconds'] = float(entry.get('seconds', 0.0)) + seconds
+        entry['last_watch'] = datetime.now().isoformat()
+        watch_data[title] = entry
+        save_json_file(WATCH_DATA_FILE, watch_data)
+        return jsonify({'status': 'success', 'title': title, 'seconds_total': entry['seconds']})
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
 @app.route('/api/get-recommendations', methods=['GET'])
 def get_recommendations():
     """Get AI-generated recommendations"""
@@ -417,15 +522,13 @@ def get_recommendations():
         user_data = load_json_file(USER_DATA_FILE)
         search_data = load_json_file(SEARCH_DATA_FILE)
         watch_data = load_json_file(WATCH_DATA_FILE)
-        
-        recommendations = ai_engine.generate_recommendations(
-            user_data, search_data, watch_data, num_recommendations=6
-        )
-        
+        # Enhanced recommender with diversity and jitter
+        items = ai_engine.recommend(user_data, search_data, watch_data, n=12)
         return jsonify({
             'status': 'success',
-            'recommendations': recommendations,
-            'algorithm': 'hybrid_collaborative_content_based'
+            'recommendations': [it['title'] for it in items],
+            'itemsDetailed': items,
+            'algorithm': 'profile_content_hybrid_v2_mmr_jitter'
         })
     
     except Exception as e:
