@@ -267,6 +267,12 @@ body {
     opacity: 1; /* Show text on hover */
 }
 
+/* Hide any leftover overlays on AI recommendation thumbnails */
+.ai-recommendations .card-title,
+.ai-recommendations .ai-badge-card {
+    display: none !important;
+}
+
 /* Video card actions */
 .card-actions {
     position: absolute;
