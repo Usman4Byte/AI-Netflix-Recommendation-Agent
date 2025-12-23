@@ -84,8 +84,6 @@ async function trackPreference(movie, liked, disliked) {
         
         if (response.ok) {
             console.log('Preference tracked successfully');
-            await loadAIRecommendations();
-            await loadUserStats();
         }
     } catch (error) {
         console.warn('Failed to track preference:', error);
@@ -162,15 +160,15 @@ async function loadAIRecommendations() {
                 aiRecommendations = allMovieTitles.slice(0, 12);
                 aiDetailed = aiRecommendations.map(t => ({ title: t, score: 0, reasons: ['Fallback'] }));
             }
-            
-            populateAIRecommendations();
+            // Render respecting any active search filter
+            refreshGridRespectingSearch();
         }
     } catch (error) {
         console.warn('Failed to load AI recommendations:', error);
         console.log('Using fallback recommendations due to error');
         aiRecommendations = allMovieTitles.slice(0, 12);
         aiDetailed = aiRecommendations.map(t => ({ title: t, score: 0, reasons: ['Fallback'] }));
-        populateAIRecommendations();
+        refreshGridRespectingSearch();
     }
 }
 
@@ -190,11 +188,10 @@ async function loadUserStats() {
     }
 }
 
-// Create video card with AI enhancements
-function createVideoCard(title, isAIRecommended = true, badgeText = 'AI Pick') {
+// Create video card (no text overlays on thumbnails)
+function createVideoCard(title) {
     const card = document.createElement('div');
     card.className = 'video-card ai-recommended';
-    const detail = aiDetailed.find(d => d.title === title);
 
     const movieData = movies[title];
     if (!movieData) {
@@ -215,16 +212,7 @@ function createVideoCard(title, isAIRecommended = true, badgeText = 'AI Pick') {
         return;
     });
 
-    // AI badge
-    const aiBadge = document.createElement('div');
-    aiBadge.className = 'ai-badge-card';
-    const reasonTxt = detail && Array.isArray(detail.reasons) && detail.reasons.length > 0 ? ` • ${detail.reasons[0]}` : '';
-    aiBadge.innerHTML = `<i class="fas fa-robot"></i> ${badgeText}${reasonTxt}`;
-
-    // Title overlay
-    const titleOverlay = document.createElement('div');
-    titleOverlay.className = 'card-title';
-    titleOverlay.innerText = title;
+    // No AI badge or title overlay on thumbnail
 
     // Action buttons
     const actionsOverlay = document.createElement('div');
@@ -247,6 +235,7 @@ function createVideoCard(title, isAIRecommended = true, badgeText = 'AI Pick') {
         const wasLiked = likeBtn.classList.contains('active');
         toggleLike(title, likeBtn, dislikeBtn);
         await trackPreference(title, !wasLiked, false);
+        clearSearchAndRefresh();
     });
 
     dislikeBtn.addEventListener('click', async (e) => {
@@ -254,6 +243,7 @@ function createVideoCard(title, isAIRecommended = true, badgeText = 'AI Pick') {
         const wasDisliked = dislikeBtn.classList.contains('active');
         toggleDislike(title, likeBtn, dislikeBtn);
         await trackPreference(title, false, !wasDisliked);
+        clearSearchAndRefresh();
     });
 
     // Click to play
@@ -270,8 +260,6 @@ function createVideoCard(title, isAIRecommended = true, badgeText = 'AI Pick') {
     actionsOverlay.appendChild(dislikeBtn);
 
     card.appendChild(thumbnail);
-    card.appendChild(aiBadge);
-    card.appendChild(titleOverlay);
     card.appendChild(actionsOverlay);
     
     return card;
@@ -347,13 +335,7 @@ function populateAIRecommendations() {
     const list = aiRecommendations.length ? aiRecommendations : allMovieTitles.slice(0, 12);
     list.forEach(movie => {
         if (movies[movie]) {
-            const detail = aiDetailed.find(d => d.title === movie);
-            const card = createVideoCard(movie, true, 'AI Pick');
-            // Update badge with reason if available
-            const badge = card.querySelector('.ai-badge-card');
-            const reasonTxt = detail && Array.isArray(detail.reasons) && detail.reasons.length > 0 ? ` • ${detail.reasons[0]}` : '';
-            const scoreTxt = detail && detail.score != null ? ` (${detail.score})` : '';
-            if (badge) badge.innerHTML = `<i class="fas fa-robot"></i> AI Pick${scoreTxt}${reasonTxt}`;
+            const card = createVideoCard(movie);
             container.appendChild(card);
         }
     });
@@ -456,7 +438,7 @@ function initializeSearch() {
         
         if (query.length >= 2) {
             await trackSearch(query);
-            filterRecommendations(query);
+                renderFiltered(query);
         } else {
             // Reset to main AI grid and refresh
             populateAIRecommendations();
@@ -464,6 +446,16 @@ function initializeSearch() {
         }
     });
 }
+
+    function clearSearchAndRefresh() {
+        const input = document.getElementById('searchInput');
+        if (input) {
+            input.value = '';
+            input.classList.remove('active');
+        }
+        // Re-fetch updated recommendations and render full grid
+        debouncedRefreshRecommendations();
+    }
 
 function filterRecommendations(query) {
     const filteredMovies = allMovieTitles.filter(movie => 
@@ -474,17 +466,35 @@ function filterRecommendations(query) {
     container.innerHTML = '';
     filteredMovies.slice(0, 12).forEach(movie => {
         if (movies[movie]) {
-            const detail = aiDetailed.find(d => d.title === movie);
-            const card = createVideoCard(movie, true, 'Match');
-            const badge = card.querySelector('.ai-badge-card');
-            const reasonTxt = detail && Array.isArray(detail.reasons) && detail.reasons.length > 0 ? ` • ${detail.reasons[0]}` : '';
-            if (badge) badge.innerHTML = `<i class=\"fas fa-robot\"></i> Match${reasonTxt}`;
+            const card = createVideoCard(movie);
             container.appendChild(card);
         }
     });
     if (filteredMovies.length === 0) {
         container.innerHTML = '<div class="no-results">No matches found</div>';
     }
+}
+
+function refreshGridRespectingSearch() {
+    const input = document.getElementById('searchInput');
+    const q = (input && input.value ? input.value : '').toLowerCase().trim();
+    if (q.length >= 2) {
+        renderFiltered(q);
+    } else {
+        populateAIRecommendations();
+    }
+}
+
+function renderFiltered(query) {
+    const container = document.getElementById('ai-recommendations-posters');
+    if (!container) return;
+    container.innerHTML = '';
+    const filtered = aiRecommendations.filter(t => t.toLowerCase().includes(query));
+    const list = filtered.length ? filtered : aiRecommendations;
+    list.slice(0, 12).forEach(t => {
+        if (movies[t]) container.appendChild(createVideoCard(t));
+    });
+    if (!list.length) container.innerHTML = '<div class="no-results">No matches found</div>';
 }
 
 // Video player (same as main page)
@@ -515,7 +525,7 @@ function createOverlayElements() {
     overlayLikeBtn.innerHTML = '<i class="fas fa-thumbs-up"></i>';
     overlayLikeBtn.id = 'overlay-like-btn';
     
-    const overlayDislikeBtn = document.createElement('button');
+           debouncedRefreshRecommendations();
     overlayDislikeBtn.className = 'action-btn dislike-btn';
     overlayDislikeBtn.innerHTML = '<i class="fas fa-thumbs-down"></i>';
     overlayDislikeBtn.id = 'overlay-dislike-btn';
@@ -523,7 +533,7 @@ function createOverlayElements() {
     overlayActions.appendChild(overlayLikeBtn);
     overlayActions.appendChild(overlayDislikeBtn);
 
-    const player = document.createElement('video');
+           debouncedRefreshRecommendations();
     player.id = 'overlay-video';
     player.className = 'overlay-video';
     player.controls = true;
@@ -567,6 +577,7 @@ function openPlayer(title, src) {
         const wasLiked = overlayLikeBtn.classList.contains('active');
         toggleLike(title, overlayLikeBtn, overlayDislikeBtn);
         await trackPreference(title, !wasLiked, false);
+        debouncedRefreshRecommendations();
     };
     
     overlayDislikeBtn.onclick = async (e) => {
@@ -574,6 +585,7 @@ function openPlayer(title, src) {
         const wasDisliked = overlayDislikeBtn.classList.contains('active');
         toggleDislike(title, overlayLikeBtn, overlayDislikeBtn);
         await trackPreference(title, false, !wasDisliked);
+        debouncedRefreshRecommendations();
     };
 
     overlay.classList.add('open');
