@@ -1,37 +1,28 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Netflix - Video Browse</title>
+    <title>Netflix Clone</title>
     <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
 </head>
-
 <body>
-
     <div class="nav" id="nav">
         <div class="nav-left">
-            <img class="nav-logo" src="https://upload.wikimedia.org/wikipedia/commons/0/08/Netflix_2015_logo.svg"
-                alt="Netflix">
+            <img class="nav-logo" src="https://upload.wikimedia.org/wikipedia/commons/0/08/Netflix_2015_logo.svg" alt="Netflix">
             <ul class="nav-links">
                 <li><a href="index.html" class="active">Home</a></li>
                 <li><a href="recommendations.html">Recommendations <span class="ai-badge">AI</span></a></li>
             </ul>
         </div>
-
         <div class="nav-right">
             <div class="search-box">
-                <button class="search-btn" id="searchBtn">
-                    <i class="fas fa-search"></i>
-                </button>
-                <input type="text" class="search-input" id="searchInput" placeholder="Titles, people, genres">
+                <button class="search-btn" id="searchBtn"><i class="fas fa-search"></i></button>
+                <input type="text" class="search-input" id="searchInput" placeholder="Search...">
             </div>
-
-            <span class="nav-text">KIDS</span>
-            <img class="nav-avatar" src="https://upload.wikimedia.org/wikipedia/commons/0/0b/Netflix-avatar.png"
-                alt="Profile">
+            <span class="nav-text">PROFILE</span>
+            <img class="nav-avatar" src="https://upload.wikimedia.org/wikipedia/commons/0/0b/Netflix-avatar.png" alt="Profile">
         </div>
     </div>
 
@@ -42,32 +33,38 @@
                 <button class="banner-button play"><i class="fas fa-play"></i> Play</button>
                 <button class="banner-button info"><i class="fas fa-info-circle"></i> More Info</button>
             </div>
-            <p class="banner-description">
-                When a young boy vanishes, a small town uncovers a mystery involving secret experiments, terrifying
-                supernatural forces, and one strange little girl.
-            </p>
+            <p class="banner-description">When a young boy vanishes, a small town uncovers a mystery involving secret experiments.</p>
         </div>
         <div class="banner--fadeBottom"></div>
     </header>
 
     <main class="main-content">
+        
+        <!-- AI Recommended For You -->
+        <!-- <div class="row ai-row">
+            <h2>Recommended For You <span class="ai-badge"><i class="fas fa-robot"></i> AI</span></h2>
+            <div class="row-posters" id="recommended-posters"></div>
+        </div> -->
+
+        <!-- Trending Now -->
         <div class="row">
             <h2>Trending Now</h2>
-            <div class="row-posters"></div>
+            <div class="row-posters" id="trending-posters"></div>
         </div>
 
+        <!-- Top 10 Today -->
         <div class="row">
             <h2>Top 10 Today</h2>
-            <div class="row-posters"></div>
+            <div class="row-posters" id="top10-posters"></div>
         </div>
 
+        <!-- Action Thrillers -->
         <div class="row">
             <h2>Action Thrillers</h2>
-            <div class="row-posters"></div>
+            <div class="row-posters" id="action-posters"></div>
         </div>
     </main>
 
     <script src="script.js"></script>
 </body>
-
 </html>
