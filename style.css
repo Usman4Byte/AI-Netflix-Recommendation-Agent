@@ -222,6 +222,33 @@ body {
     display: none;
 }
 
+/* Loading text for recommendations */
+.loading-text {
+    color: #888;
+    padding: 40px;
+    text-align: center;
+    font-size: 14px;
+    width: 100%;
+}
+
+/* AI Row styling */
+.ai-row h2 {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.ai-row h2 .ai-badge {
+    background: linear-gradient(135deg, #e50914, #b20710);
+    padding: 4px 10px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+}
+
 /* The Individual Video Card */
 .video-card {
     position: relative;
